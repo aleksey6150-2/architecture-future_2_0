@@ -53,3 +53,14 @@ DWH становится источником через CDC, событийна
 * [events.md](Task4Advanced/events.md) — каталог событий с общим конвертом.
 * [tech-radar.md](Task5Advanced/tech-radar.md) — обоснование по осям гибкость / масштабируемость / скорость с привязкой к целям и честными trade-offs (со ссылкой на меры из Task 3).
 
+### Задание 5. Проектирование технологического стека и расчёт стоимости
+
+#### Технологический радар
+
+![future20_tech_radar.svg](Task5Advanced/img/future20_tech_radar.svg)
+
+Три артефакта:
+
+* [tech-radar.md](Task5Advanced/tech-radar.md) — расширенный радар по четырём квадрантам (паттерны, платформы, инструменты, данные) с кольцами Adopt/Trial/Assess/Hold и обоснованием каждого.
+* [tco-analysis.md](Task5Advanced/tco-analysis.md) — модель TCO по четырём статьям, сравнение текущей и целевой архитектуры за 3 года, J-кривая с точкой окупаемости и качественные выгоды.
+* [roadmap.md](Task5Advanced/roadmap.md)  — роли (Data Product Owner, Data Engineer, BI-аналитик и поддерживающие) и три этапа с критериями выхода и привязкой к бизнес-целям.
