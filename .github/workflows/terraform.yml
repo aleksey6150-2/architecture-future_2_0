@@ -1,0 +1,91 @@
+name: terraform
+
+on:
+  pull_request:
+    paths: [ "Task2Advanced/**" ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Окружение для apply"
+        type: choice
+        options: [dev, stage, prod]
+        required: true
+
+# Токену workflow выдаём минимум прав (принцип наименьших привилегий)
+permissions:
+  contents: read
+  pull-requests: write   # чтобы оставить план комментарием к PR
+
+env:
+  TF_VERSION: "1.10.5"
+  # Ключи для S3-backend (Object Storage) — ТОЛЬКО из secrets, в коде их нет
+  AWS_ACCESS_KEY_ID:     ${{ secrets.YC_S3_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.YC_S3_SECRET_ACCESS_KEY }}
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    strategy:
+      # на PR — план для всех трёх сред; на ручном запуске — только выбранная
+      matrix:
+        env: ${{ github.event_name == 'pull_request'
+          && fromJSON('["dev","stage","prod"]')
+          || fromJSON(format('["{0}"]', inputs.environment)) }}
+    defaults:
+      run:
+        working-directory: Task2Advanced/envs/${{ matrix.env }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      # Ключ сервисного аккаунта для провайдера: секрет передаём через env (не инлайним в скрипт)
+      - name: Setup Yandex auth
+        env:
+          SA_KEY: ${{ secrets.YC_SA_KEY }}
+        run: |
+          echo "$SA_KEY" > "$RUNNER_TEMP/sa-key.json"
+          echo "YC_SERVICE_ACCOUNT_KEY_FILE=$RUNNER_TEMP/sa-key.json" >> "$GITHUB_ENV"
+
+      - run: terraform fmt -check -recursive
+      - run: terraform init -input=false
+      - run: terraform validate
+      - name: Plan
+        run: terraform plan -input=false -var-file=${{ matrix.env }}.tfvars -out=tfplan
+
+      - name: Upload plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ matrix.env }}
+          path: Task2Advanced/envs/${{ matrix.env }}/tfplan
+          retention-days: 1
+
+  apply:
+    if: github.event_name == 'workflow_dispatch'
+    needs: plan
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}   # <-- ЗДЕСЬ срабатывает approval-гейт
+    defaults:
+      run:
+        working-directory: Task2Advanced/envs/${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - name: Setup Yandex auth
+        env:
+          SA_KEY: ${{ secrets.YC_SA_KEY }}
+        run: |
+          echo "$SA_KEY" > "$RUNNER_TEMP/sa-key.json"
+          echo "YC_SERVICE_ACCOUNT_KEY_FILE=$RUNNER_TEMP/sa-key.json" >> "$GITHUB_ENV"
+      - run: terraform init -input=false
+      - name: Download reviewed plan
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-${{ inputs.environment }}
+          path: Task2Advanced/envs/${{ inputs.environment }}
+      - name: Apply
+        run: terraform apply -input=false tfplan   # применяем РОВНО отревьюенный план
